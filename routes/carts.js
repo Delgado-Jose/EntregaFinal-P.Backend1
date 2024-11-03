@@ -1,42 +1,47 @@
 const express = require('express');
-const fs = require('fs');
+const Cart = require('../models/cart.js');  
+const Product = require('../models/product.js');
 const router = express.Router();
-const path = './data/carts.json';
 
-let carts = JSON.parse(fs.readFileSync(path, 'utf8'));
-
-router.get('/:cid', (req, res) => {
-    const cart = carts.find(c => c.id === req.params.cid);
-    if (cart) {
-        res.json(cart);
-    } else {
-        res.status(404).send('Datos no Encontrados');
+router.get('/:cid', async (req, res) => {
+    try {
+        const cart = await Cart.findById(req.params.cid).populate('products.product');
+        if (cart) {
+            res.json(cart);
+        } else {
+            res.status(404).send('Carrito no encontrado');
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener el carrito' });
     }
 });
 
-router.post('/', (req, res) => {
-    const newCart = {
-        id: (Math.random().toString(36).substr(2, 9)),
-        products: []
-    };
-    carts.push(newCart);
-    fs.writeFileSync(path, JSON.stringify(carts, null, 2));
-    res.status(201).json(newCart);
+router.post('/', async (req, res) => {
+    try {
+        const newCart = new Cart({ products: [] });
+        await newCart.save();
+        res.status(201).json(newCart);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al crear el carrito' });
+    }
 });
 
-router.post('/:cid/product/:pid', (req, res) => {
-    const cart = carts.find(c => c.id === req.params.cid);
-    if (cart) {
-        const productIndex = cart.products.findIndex(p => p.id === req.params.pid);
+router.post('/:cid/product/:pid', async (req, res) => {
+    try {
+        const cart = await Cart.findById(req.params.cid);
+        if (!cart) return res.status(404).send('Carrito no encontrado');
+
+        const productIndex = cart.products.findIndex(p => p.product.equals(req.params.pid));
         if (productIndex !== -1) {
             cart.products[productIndex].quantity += 1;
         } else {
-            cart.products.push({ id: req.params.pid, quantity: 1 });
+            cart.products.push({ product: req.params.pid, quantity: 1 });
         }
-        fs.writeFileSync(path, JSON.stringify(carts, null, 2));
+
+        await cart.save();
         res.json(cart);
-    } else {
-        res.status(404).send('Datos no Encontrados');
+    } catch (error) {
+        res.status(500).json({ error: 'Error al agregar producto al carrito' });
     }
 });
 
